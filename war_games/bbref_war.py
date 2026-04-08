@@ -3,7 +3,7 @@ import time
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 
-start_year = 2024
+start_year = 2020
 end_year = 2025
 
 batting_rows = []
@@ -86,10 +86,10 @@ for year in range(start_year, end_year + 1):
 
 # Save
 batting_df = pd.DataFrame(batting_rows)
-batting_df.to_csv("BBRef_Batting_WAR.csv", index=False)
+batting_df.to_csv("data/BBRef_Batting_WAR.csv", index=False)
 
 pitching_df = pd.DataFrame(pitching_rows)
-pitching_df.to_csv("BBRef_Pitching_WAR.csv", index=False)
+pitching_df.to_csv("data/BBRef_Pitching_WAR.csv", index=False)
 
 print(f"\nDone! Batting: {len(batting_df)} rows, Pitching: {len(pitching_df)} rows")
-print("Files: BBRef_Batting_WAR.csv, BBRef_Pitching_WAR.csv")
+print("Files: data/BBRef_Batting_WAR.csv, data/BBRef_Pitching_WAR.csv")
