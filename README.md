@@ -1,268 +1,138 @@
-# Lahman Baseball Database Explorer
+# Baseball Data Project
 
-This project is a small data engineering and analysis workflow built around the **Lahman Baseball Database**. The goal is to practice working with relational databases, SQL queries, and building a simple interactive data application.
+A data engineering and analysis project built around the **Lahman Baseball Database** and **Baseball Reference WAR data**. The project covers database construction, SQL exploration, WAR integration, and interactive Streamlit apps.
 
-The project uses:
-
-- **SQLite** for the database
-- **Python + Jupyter Notebook** for data loading and SQL exploration
-- **Streamlit** for a lightweight web interface
-
-The dataset comes from the Lahman baseball database, which contains historical Major League Baseball statistics.
+Technologies: Python, pandas, SQLite, SQL, Streamlit, Jupyter Notebook, BeautifulSoup
 
 ---
 
-# Project Structure
+## Project Structure
 
 ```
 .
-├── app.py
-├── bbref.py
-├── bbref2.py
-├── project.ipynb
-├── lahman.db
-├── BBRef_Batting_1900_2025.csv
-├── BBRef_Pitching_1900_2025.csv
-├── data/
-│   ├── People.csv
-│   ├── Batting.csv
-│   ├── Pitching.csv
-│   ├── Teams.csv
-│   ├── Salaries.csv
-│   └── ...
-```
-
-Key files:
-
-- **project.ipynb** – Jupyter notebook used to build the database and explore SQL queries.
-- **lahman.db** – SQLite database created from the Lahman CSV files.
-- **app.py** – Streamlit application for interactive exploration of player statistics.
-- **data/** – Raw Lahman CSV files used to populate the database.
-
----
-
-# Stage 1 – Database Construction
-
-The notebook loads CSV files from the Lahman dataset and constructs a relational SQLite database.
-
-Tables currently used in the project:
-
-- `People`
-- `Batting`
-- `Pitching`
-- `Teams`
-- `Salaries`
-
-### Steps performed
-
-1. Load CSV files using **pandas**
-2. Inspect column names and data types
-3. Create a SQLite database (`lahman.db`)
-4. Define primary keys and foreign keys
-5. Create SQL tables
-6. Insert data from the DataFrames
-7. Perform sanity checks to verify row counts
-
-Example checks:
-
-- Compare SQLite table lengths with DataFrame lengths
-- Inspect schemas using:
-
-```sql
-PRAGMA table_info(Batting);
+├── app_lahman.py                # Streamlit app – Lahman database explorer
+├── app_ig.py                    # Streamlit app – Immaculate Grid solver
+├── build_db_lahman.py           # Builds lahman.db from raw Lahman CSVs
+├── build_db_ig.py               # Builds war_games.db (Lahman + WAR + awards)
+├── build_tables_augmented.py    # Merges WAR into Lahman batting/pitching tables
+├── build_tables_subset.py       # Filters Lahman data to 2000+ subset
+├── scraper_bbref.py             # Scrapes WAR from Baseball Reference (2000–2025)
+├── databases/
+│   ├── lahman.db                # SQLite – basic Lahman tables
+│   └── war_games.db             # SQLite – Lahman + WAR + awards + HoF
+├── notebooks/
+│   ├── exploring_lahman.ipynb   # SQL exploration on lahman.db
+│   ├── queries.ipynb            # Advanced queries and Immaculate Grid logic
+│   ├── test_db.ipynb            # Validation for war_games.db
+│   └── test_augmented.ipynb     # Validation for augmented CSV files
+├── raw_data/                    # Original Lahman CSV files (27 tables)
+├── my_data/                     # Processed CSVs (filtered + WAR-augmented)
+└── future_work/
 ```
 
 ---
 
-# Stage 2 – SQL Exploration (Jupyter)
+## Data Pipeline
 
-The notebook is used to practice SQL queries on the baseball data.
-
-Topics covered:
-
-### Basic Queries
-
-- `SELECT`
-- `WHERE`
-- `ORDER BY`
-- `LIMIT`
-
-Example:
-
-```sql
-SELECT playerID, yearID, HR
-FROM Batting
-ORDER BY HR DESC
-LIMIT 10;
 ```
+Baseball Reference (2000–2025)
+    ↓  scraper_bbref.py
+BBRef_Batting_WAR.csv, BBRef_Pitching_WAR.csv
+    ↓  build_tables_subset.py (filters Lahman to 2000+)
+    ↓  build_tables_augmented.py (merges WAR)
+Batting_with_WAR.csv, Pitching_with_WAR.csv  →  my_data/
+    ↓  build_db_ig.py
+war_games.db  →  databases/
 
-### Aggregation
-
-- `GROUP BY`
-- `SUM`
-- `AVG`
-- `HAVING`
-
-Example:
-
-```sql
-SELECT playerID,
-       SUM(HR) AS career_hr
-FROM Batting
-GROUP BY playerID
-ORDER BY career_hr DESC
-LIMIT 10;
-```
-
-### Joins
-
-Example joining player names with batting data:
-
-```sql
-SELECT p.nameFirst,
-       p.nameLast,
-       SUM(b.HR) AS career_hr
-FROM Batting b
-JOIN People p
-    ON b.playerID = p.playerID
-GROUP BY b.playerID
-ORDER BY career_hr DESC
-LIMIT 10;
-```
-
-### Exploratory Questions
-
-Some exploratory analyses included:
-
-- Career batting average leaders
-- Home run totals by season
-- Best teams by winning percentage
-- Stolen base trends over time
-
-Reusable helper function in the notebook:
-
-```python
-def run_query(query, params=None):
-    return pd.read_sql_query(query, conn, params=params)
+raw_data/ (Lahman CSVs)
+    ↓  build_db_lahman.py
+lahman.db  →  databases/
 ```
 
 ---
 
-# Stage 3 – Streamlit Web App
+## Databases
 
-A simple interactive application is built using **Streamlit**.
+### lahman.db
+Basic Lahman tables: `People`, `Batting`, `Pitching`, `Teams`, `Salaries`.
 
-The app allows users to:
+### war_games.db
+Extended database with WAR and metadata:
+- `People`, `Teams`, `Salaries`
+- `Batting_with_WAR`, `Pitching_with_WAR`
+- `Appearances`, `AwardsPlayers`, `HallOfFame`
 
-- Select a **year range**
-- Filter by **team**
-- Select a **player**
-- Choose a statistic to visualize
-
-The application dynamically generates SQL queries based on user input.
-
-Example query structure:
-
-```sql
-SELECT playerID,
-       yearID,
-       teamID,
-       G AS games,
-       AB AS at_bats,
-       H AS hits,
-       2B,
-       3B,
-       HR AS home_runs,
-       RBI AS rbis
-FROM Batting
-WHERE playerID = ?
-AND yearID BETWEEN ? AND ?
-```
-
-The results are displayed as:
-
-- A **data table**
-- A **bar chart of selected statistics over time**
+Foreign keys enforced. Data covers 2000–2025.
 
 ---
 
-# Running the Project
+## Streamlit Apps
 
-## 1. Create the Database
-
-Run the Jupyter notebook:
-
-```
-project.ipynb
-```
-
-This will generate:
-
-```
-lahman.db
-```
-
----
-
-## 2. Launch the Streamlit App
-
-From the project directory:
+### Lahman Explorer (`app_lahman.py`)
 
 ```bash
-streamlit run app.py
+streamlit run app_lahman.py
 ```
 
-Then open the browser interface that Streamlit launches.
+- Filter by year range, team, and player
+- View batting stats table and bar charts
+
+### Immaculate Grid Solver (`app_ig.py`)
+
+```bash
+streamlit run app_ig.py
+```
+
+- Select 3 row franchises and 3 column franchises
+- Solves the 3x3 grid: finds players who played for both franchises
+- Includes batters and pitchers
+- Uses backtracking with highest career WAR preference
 
 ---
 
-# Example App Features
+## Notebooks
 
-The app allows users to dynamically explore:
-
-- Player seasonal statistics
-- Team filters
-- Time ranges
-- Individual stat visualization
-
-Example chart options:
-
-- Hits
-- Doubles
-- Triples
-- Home Runs
-- RBIs
+- **exploring_lahman.ipynb** – SQL practice on lahman.db: SELECT, WHERE, JOIN, GROUP BY, aggregates, batting average leaders, HR trends, team win %
+- **queries.ipynb** – Advanced analysis on war_games.db: top WAR seasons, franchise stats, Immaculate Grid solver logic
+- **test_db.ipynb** – Validates war_games.db: row counts, WAR coverage, referential integrity, spot checks
+- **test_augmented.ipynb** – Validates augmented CSVs: WAR availability, multi-team players, spot checks
 
 ---
 
-# Possible Future Improvements
+## Running the Project
 
-Potential extensions for the project:
+### 1. Build the Lahman database
 
-- Add pitching statistics
-- Add team-level analysis
-- Add player name lookup instead of playerID
-- Include additional Lahman tables (Fielding, Awards, AllStar)
-- Add advanced metrics (OPS, SLG, OBP)
-- Improve charts with **Altair** or **Plotly**
+```bash
+python build_db_lahman.py
+```
+
+### 2. Scrape WAR data (optional – CSVs already in my_data/)
+
+```bash
+python scraper_bbref.py
+```
+
+### 3. Build augmented tables and war_games.db
+
+```bash
+python build_tables_subset.py
+python build_tables_augmented.py
+python build_db_ig.py
+```
+
+### 4. Launch an app
+
+```bash
+streamlit run app_lahman.py
+streamlit run app_ig.py
+```
 
 ---
 
-# Technologies Used
+## Author
 
-- Python
-- pandas
-- SQLite
-- SQL
-- Streamlit
-- Jupyter Notebook
-
-# Author
 Andres Luna
 
 https://github.com/andreslunagodoy
 https://www.linkedin.com/in/andres-luna-06a31b101/
-
-SQL Learning Project
-
-Focus: **Basic SQL queries and deployment**
