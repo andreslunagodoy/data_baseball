@@ -1,4 +1,4 @@
-# app.py
+# app_lahman.py
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -7,7 +7,7 @@ import sqlite3
 # Database Connection
 # --------------------------
 @st.cache_resource
-def get_connection(db_path="lahman.db"):
+def get_connection(db_path="databases/lahman.db"):
     """Connect to the SQLite database."""
     conn = sqlite3.connect(db_path)
     return conn

@@ -2,7 +2,7 @@ import sqlite3
 import pandas as pd
 import os
 
-DB_PATH = "war_games.db"
+DB_PATH = "databases/war_games.db"
 
 # Remove existing database to rebuild from scratch
 if os.path.exists(DB_PATH):
@@ -227,14 +227,14 @@ print("Schema created.")
 # --- Load data (parents first, then children) ---
 
 tables = [
-    ("People", "data/People.csv"),
-    ("Teams", "data/Teams.csv"),
-    ("Salaries", "data/Salaries.csv"),
-    ("Batting_with_WAR", "data/Batting_with_WAR.csv"),
-    ("Pitching_with_WAR", "data/Pitching_with_WAR.csv"),
-    ("Appearances", "data/Appearances.csv"),
-    ("AwardsPlayers", "data/AwardsPlayers.csv"),
-    ("HallOfFame", "data/HallOfFame.csv"),
+    ("People", "my_data/People.csv"),
+    ("Teams", "my_data/Teams.csv"),
+    ("Salaries", "my_data/Salaries.csv"),
+    ("Batting_with_WAR", "my_data/Batting_with_WAR.csv"),
+    ("Pitching_with_WAR", "my_data/Pitching_with_WAR.csv"),
+    ("Appearances", "my_data/Appearances.csv"),
+    ("AwardsPlayers", "my_data/AwardsPlayers.csv"),
+    ("HallOfFame", "my_data/HallOfFame.csv"),
 ]
 
 for table_name, csv_path in tables:
