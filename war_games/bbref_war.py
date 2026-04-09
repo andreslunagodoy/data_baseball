@@ -3,7 +3,7 @@ import time
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
 
-start_year = 2020
+start_year = 2000
 end_year = 2025
 
 batting_rows = []

@@ -29,8 +29,8 @@ for stat_type in ["Batting", "Pitching"]:
     # Drop helper columns, keep WAR
     augmented.drop(columns=["bbrefID", "teamIDBR", "Team"], inplace=True)
 
-    augmented.to_csv(f"data/{stat_type}Augmented.csv", index=False)
+    augmented.to_csv(f"data/{stat_type}_with_WAR.csv", index=False)
 
     total = len(augmented)
     with_war = augmented["WAR"].notna().sum()
-    print(f"{stat_type}Augmented: {total} rows, {with_war} with WAR ({100*with_war/total:.1f}%)")
+    print(f"{stat_type}_with_WAR: {total} rows, {with_war} with WAR ({100*with_war/total:.1f}%)")
