@@ -4,7 +4,7 @@ import os
 from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
 
-OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "immaculate_grids.csv")
+OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "..", "my_data", "immaculate_grids.csv")
 TOTAL_GRIDS = 1102
 DELAY = 1.5  # seconds between requests
 

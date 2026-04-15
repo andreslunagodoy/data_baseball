@@ -8,7 +8,17 @@ from grid_resolver import (
     resolve_condition,
     resolve_cell,
     get_career_war,
+    get_condition_detail,
+    get_pitcher_set,
+    get_team_ab,
+    get_team_ipouts,
+    _get_team_detail,
+    _get_team_detail_pitching,
     get_all_stat_labels,
+    get_all_stat_labels_ordered,
+    get_all_display_labels,
+    display_label,
+    internal_label,
     is_unsupported,
     _normalize,
     resolve_stat,
@@ -16,7 +26,9 @@ from grid_resolver import (
     resolve_team,
 )
 
-st.set_page_config(page_title="Baseball Explorer", layout="wide")
+st.set_page_config(page_title="MLB Players Explorer", layout="wide")
+st.title("MLB Players Explorer")
+st.markdown("Explore player stats, find players matching specific conditions, and solve Immaculate Grid puzzles.")
 
 # ── DB connection ─────────────────────────────────────────────
 @st.cache_resource
@@ -57,7 +69,7 @@ def get_all_players():
 @st.cache_data
 def load_grids():
     rows = []
-    with open("scraper_ig/immaculate_grids.csv") as f:
+    with open("my_data/immaculate_grids.csv") as f:
         reader = csv.DictReader(f)
         for row in reader:
             rows.append(row)
@@ -70,47 +82,26 @@ def get_grid_condition_options():
     options = []
     for fid, fname in sorted(franchises.items(), key=lambda x: x[1]):
         options.append(("team", fid, fname))
-    for label in get_all_stat_labels():
+    for label in get_all_stat_labels_ordered():
         options.append(("stat", None, label))
     return options
 
 
 # ── Tab definitions ───────────────────────────────────────────
-tab_home, tab_player, tab_conditions, tab_grid = st.tabs([
-    "Home", "Player Lookup", "Condition Explorer", "Immaculate Grid"
+tab_conditions, tab_grid, tab_player, tab_about = st.tabs([
+    "Player Finder", "Immaculate Grid", "Player Stats", "About"
 ])
 
 
 # ══════════════════════════════════════════════════════════════
-# TAB 1: HOME
-# ══════════════════════════════════════════════════════════════
-with tab_home:
-    st.title("Baseball Explorer")
-    st.markdown("""
-    A tool for exploring MLB stats and solving
-    [Immaculate Grid](https://www.immaculategrid.com/) puzzles.
-
-    **Player Lookup** — Pick a player, see their stats season by season.
-
-    **Condition Explorer** — Combine conditions (teams, awards, stat milestones)
-    and find which players match all of them. Great for answering questions like
-    *"Who played for the Yankees AND won an MVP while there?"*
-
-    **Immaculate Grid** — Solve any of the 1,102 grids scraped from the website,
-    or build your own by picking 6 conditions.
-
-    ---
-    *Data: [Lahman Database](https://www.seanlahman.com/) (1871–present) +
-    [Baseball Reference](https://www.baseball-reference.com/) WAR.*
-    """)
-
-
-# ══════════════════════════════════════════════════════════════
-# TAB 2: PLAYER LOOKUP
+# TAB: PLAYER LOOKUP
 # ══════════════════════════════════════════════════════════════
 with tab_player:
-    st.header("Player Lookup")
-    st.markdown("Search for a player to see their batting and pitching stats, year by year. Use the year filter to narrow the range.")
+    st.header("Player Stats")
+    st.markdown("""Search for any MLB player by name. You'll see their season-by-season
+    batting and/or pitching lines with rate stats (AVG, OBP, SLG, OPS for
+    batters; ERA, WHIP for pitchers), plus career totals. Use the year
+    filter to focus on a specific era.""")
 
     players_df = get_all_players()
     # Build "Name (playerID)" labels for selectbox
@@ -211,23 +202,25 @@ with tab_player:
 
 
 # ══════════════════════════════════════════════════════════════
-# TAB 3: CONDITION EXPLORER
+# TAB: CONDITION EXPLORER
 # ══════════════════════════════════════════════════════════════
 with tab_conditions:
-    st.header("Condition Explorer")
-    st.markdown("Pick up to 5 conditions — teams, awards, stat thresholds, positions — and see which players satisfy **all** of them. By default, season-level stats must have been achieved while on the selected team (like in Immaculate Grid).")
+    st.header("Player Finder")
+    st.markdown("""Pick up to 5 conditions and find players who satisfy **all** of them.
+    For example: *Yankees + 30+ HR (season)* finds players who hit 30+ homers
+    in a season while on the Yankees.""")
 
-    # Build unified options list: teams + stats
-    stat_labels = get_all_stat_labels()
+    # Build unified options list: teams + stats (with clean display labels)
+    stat_labels = get_all_stat_labels_ordered()
     franchises = get_franchises()
 
     cond_options = ["(none)"]
-    cond_data = [None]  # parallel list: (type, code, label) or None
+    cond_data = [None]  # parallel list: (type, code, internal_label) or None
     for fid, fname in sorted(franchises.items(), key=lambda x: x[1]):
-        cond_options.append(f"Team: {fname}")
+        cond_options.append(fname)
         cond_data.append(("team", fid, fname))
     for label in stat_labels:
-        cond_options.append(f"Stat: {label}")
+        cond_options.append(display_label(label))
         cond_data.append(("stat", None, label))
 
     selected = []
@@ -242,16 +235,16 @@ with tab_conditions:
             if idx != "(none)":
                 selected.append(cond_data[cond_options.index(idx)])
 
-    col_mode, col_constraint = st.columns(2)
-    with col_mode:
-        mode = st.radio("Display mode", ["Highest career WAR", "Lowest career WAR", "Random"], horizontal=True)
+    col_constraint, col_random = st.columns(2)
     with col_constraint:
         constraint_mode = st.radio(
             "Resolution mode",
             ["Team-constrained (Immaculate Grid rules)", "Standalone (independent intersection)"],
             horizontal=True,
-            help="Team-constrained: year-bound stats (season, awards, positions) must be achieved while on the selected team(s). Standalone: conditions are resolved independently and intersected.",
+            help="Team-constrained: year-bound stats must be achieved while on the selected team(s).",
         )
+    with col_random:
+        use_random = st.checkbox("Show 10 random instead of top 10")
     use_team_constraint = constraint_mode.startswith("Team")
 
     if st.button("Show players", key="cond_show"):
@@ -266,14 +259,11 @@ with tab_conditions:
                 stats = [c for c in selected if c[0] == "stat"]
 
                 if use_team_constraint and teams and stats:
-                    # Team-constrained: for each stat, resolve against each team,
-                    # then intersect all results
                     player_set = None
                     for cond_type, code, label in selected:
                         if cond_type == "team":
                             pids = resolve_team(conn, code)
                         else:
-                            # Intersect this stat constrained to each team
                             stat_set = None
                             for _, fid, _ in teams:
                                 team_pids = resolve_stat_for_team(conn, label, fid)
@@ -287,7 +277,6 @@ with tab_conditions:
                         else:
                             player_set = player_set & pids
                 else:
-                    # Standalone: resolve each independently and intersect
                     player_set = None
                     for cond_type, code, label in selected:
                         if cond_type == "team":
@@ -303,32 +292,148 @@ with tab_conditions:
                     st.info("No players satisfy all selected conditions.")
                 else:
                     war_lookup = get_career_war(conn, player_set)
-                    rows = [(pid, name, war) for pid, (name, war) in war_lookup.items()]
+                    franch_ids = [c[1] for c in selected if c[0] == "team"]
 
-                    if mode == "Highest career WAR":
-                        rows.sort(key=lambda x: x[2], reverse=True)
-                        rows = rows[:10]
-                    elif mode == "Lowest career WAR":
-                        rows.sort(key=lambda x: x[2])
-                        rows = rows[:10]
-                    else:
+                    # --- Sorting ---
+                    if use_random:
                         import random
-                        rows = random.sample(rows, min(10, len(rows)))
+                        sample = random.sample(list(player_set), min(20, len(player_set)))
+                        rows = [(pid, war_lookup[pid][0], war_lookup[pid][1]) for pid in sample if pid in war_lookup]
+                    elif teams and not stats:
+                        # Teams-only: split into batters/pitchers, sort each group
+                        pitchers = get_pitcher_set(conn, player_set)
+                        batters = player_set - pitchers
 
-                    result_df = pd.DataFrame(rows, columns=["playerID", "Name", "Career WAR"])
-                    result_df["Career WAR"] = result_df["Career WAR"].round(1)
-                    result_df.index = range(1, len(result_df) + 1)
-                    cond_desc = " + ".join(c[2] for c in selected)
-                    st.markdown(f"**{len(player_set)}** players satisfy all conditions ({cond_desc}). Showing {len(result_df)}:")
-                    st.dataframe(result_df[["Name", "Career WAR"]], width="stretch")
+                        ab_per_team = get_team_ab(conn, batters, franch_ids)
+                        def batter_sort(pid):
+                            d = ab_per_team.get(pid, {})
+                            return (sum(d.values()), min(d.values()) if d else 0)
+                        sorted_batters = sorted(batters, key=batter_sort, reverse=True)[:10]
+
+                        ip_per_team = get_team_ipouts(conn, pitchers, franch_ids)
+                        def pitcher_sort(pid):
+                            d = ip_per_team.get(pid, {})
+                            return (sum(d.values()), min(d.values()) if d else 0)
+                        sorted_pitchers = sorted(pitchers, key=pitcher_sort, reverse=True)[:10]
+
+                        rows = None  # handled separately below
+                    elif stats:
+                        first_stat = stats[0]
+                        detail_result = get_condition_detail(
+                            conn, player_set, first_stat[0], first_stat[1], first_stat[2],
+                            franch_ids or None
+                        )
+                        if detail_result and detail_result[0]:
+                            _, detail_dict = detail_result
+                            norm_label = _normalize(first_stat[2])
+                            reverse = "ERA" not in norm_label
+                            def stat_sort_key(pid):
+                                val = detail_dict.get(pid, 0)
+                                if val is None or val == "":
+                                    return 0
+                                if isinstance(val, str):
+                                    return len(val.split(","))
+                                return val
+                            sorted_pids = sorted(player_set, key=stat_sort_key, reverse=reverse)[:10]
+                        else:
+                            sorted_pids = sorted(player_set, key=lambda p: war_lookup.get(p, ("", 0))[1], reverse=True)[:10]
+                        rows = [(pid, war_lookup[pid][0], war_lookup[pid][1]) for pid in sorted_pids if pid in war_lookup]
+                    else:
+                        rows = sorted(
+                            [(pid, name, war) for pid, (name, war) in war_lookup.items()],
+                            key=lambda x: x[2], reverse=True
+                        )[:10]
+
+                    # --- Display ---
+                    if teams and not stats and not use_random:
+                        # Teams-only: two flat tables (batters + pitchers)
+                        team_names = {c[1]: c[2] for c in teams}
+                        cond_desc = " + ".join(c[2] for c in selected)
+
+                        # Batters table
+                        if sorted_batters:
+                            st.markdown(f"**Batters** ({len(batters)} total, showing {len(sorted_batters)})")
+                            bat_rows = []
+                            bat_details = {}
+                            for fid in franch_ids:
+                                bat_details[fid] = _get_team_detail(conn, set(sorted_batters), fid)
+                            for pid in sorted_batters:
+                                row_data = {"Name": war_lookup[pid][0]}
+                                for fid in franch_ids:
+                                    d = bat_details[fid].get(pid, {})
+                                    row_data[f"{fid} Yrs"] = d.get("Years", "")
+                                    row_data[f"{fid} AB"] = d.get("AB", 0)
+                                    row_data[f"{fid} HR"] = d.get("HR", 0)
+                                    row_data[f"{fid} RBI"] = d.get("RBI", 0)
+                                    row_data[f"{fid} AVG"] = d.get("AVG")
+                                    row_data[f"{fid} WAR"] = d.get("WAR")
+                                bat_rows.append(row_data)
+                            st.dataframe(pd.DataFrame(bat_rows), hide_index=True, width="content")
+
+                        # Pitchers table
+                        if sorted_pitchers:
+                            st.markdown(f"**Pitchers** ({len(pitchers)} total, showing {len(sorted_pitchers)})")
+                            pit_rows = []
+                            pit_details = {}
+                            for fid in franch_ids:
+                                pit_details[fid] = _get_team_detail_pitching(conn, set(sorted_pitchers), fid)
+                            for pid in sorted_pitchers:
+                                row_data = {"Name": war_lookup[pid][0]}
+                                for fid in franch_ids:
+                                    d = pit_details[fid].get(pid, {})
+                                    row_data[f"{fid} Yrs"] = d.get("Years", "")
+                                    row_data[f"{fid} IP"] = d.get("IP", 0)
+                                    row_data[f"{fid} W"] = d.get("W", 0)
+                                    row_data[f"{fid} SO"] = d.get("SO", 0)
+                                    row_data[f"{fid} ERA"] = d.get("ERA")
+                                    row_data[f"{fid} SV"] = d.get("SV", 0)
+                                    row_data[f"{fid} WAR"] = d.get("WAR")
+                                pit_rows.append(row_data)
+                            st.dataframe(pd.DataFrame(pit_rows), hide_index=True, width="content")
+                    else:
+                        # Mixed mode or random: build a table with detail columns
+                        shown_pids = {r[0] for r in rows}
+                        result_data = []
+                        detail_columns = []
+                        detail_dicts = []
+
+                        for cond_type, code, label in selected:
+                            if cond_type == "team":
+                                continue
+                            result = get_condition_detail(
+                                conn, shown_pids, cond_type, code, label, franch_ids or None
+                            )
+                            if result and result[0]:
+                                col_name, detail_dict = result
+                                detail_columns.append(col_name)
+                                detail_dicts.append(detail_dict)
+
+                        for pid, name, war in rows:
+                            row_data = {"Name": name}
+                            for col_name, detail_dict in zip(detail_columns, detail_dicts):
+                                row_data[col_name] = detail_dict.get(pid, "")
+                            result_data.append(row_data)
+
+                        result_df = pd.DataFrame(result_data)
+                        result_df.index = range(1, len(result_df) + 1)
+                        cond_desc = " + ".join(
+                            c[2] if c[0] == "team" else display_label(c[2]) for c in selected
+                        )
+                        st.markdown(f"**{len(player_set)}** players satisfy all conditions ({cond_desc}). Showing {len(result_df)}:")
+                        st.dataframe(result_df, hide_index=True, width="content")
 
 
 # ══════════════════════════════════════════════════════════════
-# TAB 4: IMMACULATE GRID
+# TAB: IMMACULATE GRID
 # ══════════════════════════════════════════════════════════════
 with tab_grid:
     st.header("Immaculate Grid")
-    st.markdown("Fill a 3x3 grid where each cell needs a player who matches both its row and column condition. The solver finds a solution using 9 different players, preferring those with the highest career WAR.")
+    st.markdown("""The [Immaculate Grid](https://www.immaculategrid.com/) is a daily
+    baseball puzzle: fill a 3×3 grid where each cell needs a player matching
+    both its row and column condition (a team, award, stat milestone, etc.),
+    using 9 different players. Pick a grid number to solve one of the 1,102
+    scraped puzzles, or build your own from any combination of conditions.
+    The solver prefers players with the highest career WAR.""")
 
     grid_mode = st.radio("Mode", ["Solve a scraped grid", "Make your own grid"], horizontal=True)
 
@@ -433,11 +538,11 @@ with tab_grid:
         with cond_cols[0]:
             st.markdown("**Rows**")
             for pos in ["row1", "row2", "row3"]:
-                st.write(f"- {g[f'{pos}_label']}")
+                st.write(f"- {display_label(g[f'{pos}_label'])}")
         with cond_cols[1]:
             st.markdown("**Columns**")
             for pos in ["col1", "col2", "col3"]:
-                st.write(f"- {g[f'{pos}_label']}")
+                st.write(f"- {display_label(g[f'{pos}_label'])}")
 
         if st.button("Solve", key="solve_scraped"):
             row_conds = [
@@ -465,8 +570,8 @@ with tab_grid:
             if unsupported:
                 st.warning("Some cells involve unsupported categories and will be skipped.")
 
-            row_labels = [g["row1_label"], g["row2_label"], g["row3_label"]]
-            col_labels = [g["col1_label"], g["col2_label"], g["col3_label"]]
+            row_labels = [display_label(g["row1_label"]), display_label(g["row2_label"]), display_label(g["row3_label"])]
+            col_labels = [display_label(g["col1_label"]), display_label(g["col2_label"]), display_label(g["col3_label"])]
 
             if grid_solution is None and not unsupported:
                 st.error("No valid solution found for this grid.")
@@ -482,9 +587,9 @@ with tab_grid:
         option_labels = []
         for opt in all_options:
             if opt[0] == "team":
-                option_labels.append(f"🏟 {opt[2]}")
+                option_labels.append(opt[2])
             else:
-                option_labels.append(f"📊 {opt[2]}")
+                option_labels.append(display_label(opt[2]))
 
         col_left, col_right = st.columns(2)
 
@@ -520,3 +625,41 @@ with tab_grid:
             else:
                 st.markdown("### Solution")
                 display_grid(grid_solution, war_lookup, candidates, unsupported, row_labels, col_labels)
+
+
+# ══════════════════════════════════════════════════════════════
+# TAB: ABOUT
+# ══════════════════════════════════════════════════════════════
+with tab_about:
+    st.header("About")
+    st.markdown("""
+    **Baseball Explorer** is a data project for exploring MLB statistics
+    and solving [Immaculate Grid](https://www.immaculategrid.com/) puzzles.
+
+    ### Data sources
+    - **[Lahman Baseball Database](https://www.seanlahman.com/)** —
+      batting, pitching, fielding, awards, All-Star selections, postseason
+      stats, and Hall of Fame voting. Covers 1871 to present.
+    - **[Baseball Reference](https://www.baseball-reference.com/)** —
+      WAR (Wins Above Replacement) values, scraped per player per season.
+    - **[Immaculate Grid](https://www.immaculategrid.com/)** —
+      1,102 grid puzzle definitions scraped from the website.
+
+    ### How it works
+    The app runs on a SQLite database built from the sources above.
+    Career aggregate tables are pre-computed with rate stats (AVG, OBP,
+    SLG, OPS for batters; ERA, WHIP for pitchers). The grid solver uses
+    backtracking to fill the 3x3 grid with 9 unique players, preferring
+    those with the highest career WAR.
+
+    Season-level stats (awards, stat milestones, positions) are
+    **team-constrained** by default: when paired with a team, the player
+    must have achieved the stat while playing for that franchise.
+
+    A few categories from the Immaculate Grid website are not yet
+    supported: *Threw a No-Hitter*, *First Round Draft Pick*, and
+    *Played in Major Negro Leagues*.
+
+    ### Author
+    Andres Luna
+    """)

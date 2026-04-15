@@ -18,8 +18,9 @@ from bs4 import BeautifulSoup
 start_year = int(sys.argv[1]) if len(sys.argv) > 1 else 1871
 end_year = int(sys.argv[2]) if len(sys.argv) > 2 else 2025
 
-BATTING_CSV = "my_data/BBRef_Batting_WAR.csv"
-PITCHING_CSV = "my_data/BBRef_Pitching_WAR.csv"
+_DIR = os.path.dirname(os.path.abspath(__file__))
+BATTING_CSV = os.path.join(_DIR, "..", "my_data", "BBRef_Batting_WAR.csv")
+PITCHING_CSV = os.path.join(_DIR, "..", "my_data", "BBRef_Pitching_WAR.csv")
 
 headers = {"User-Agent": "BaseballDataProject/1.0"}
 
