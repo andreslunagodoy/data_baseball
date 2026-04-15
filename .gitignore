@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Databases (large, reproducible via build scripts)
+databases/*.db
+
+# Processed data (reproducible via scripts)
+my_data/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Claude Code
+.claude/
+
+# macOS
+.DS_Store
